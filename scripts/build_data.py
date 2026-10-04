@@ -208,6 +208,8 @@ def clean(s: str) -> str:
     s = s.replace(" ", " ")
     s = re.sub(r"\[[^\]]{0,12}\]", "", s)   # leftover [a], [12], [nb 1]
     s = re.sub(r"\s+", " ", s).strip()
+    # Wikipedia marks some rows with symbols (best seller of the year, etc.)
+    s = re.sub(r"^[\u2020\u2021\u00a7\u00b6*#\u2666\u25ca\u2605\u2726\s]+|[\u2020\u2021\u00a7\u00b6*#\u2666\u25ca\u2605\u2726\s]+$", "", s)
     return s
 
 
@@ -312,19 +314,28 @@ def extract_entries(html: str, chart: str):
 # Lookup (mirrors js/app.js - see the comment there for the rules)
 # ---------------------------------------------------------------------------
 
+def _d(iso):
+    return dt.date.fromisoformat(iso)
+
+
 def lookup(entries, day: dt.date):
-    """Return the entry at number 1 in the chart week containing `day`, or None."""
-    found = None
+    """Return the list of entries at number 1 for the chart covering `day`
+    (more than one for a joint number 1), or [] if no chart covers it."""
+    week = dt.timedelta(days=7)
+    latest_chart = None
     for e in entries:
-        start = dt.date.fromisoformat(e["week_ending_date"]) - dt.timedelta(days=6)
-        if start <= day:
-            found = e
-        else:
+        start = _d(e["week_ending_date"])
+        if start - dt.timedelta(days=6) > day:
             break
-    if found is entries[-1] and found is not None:
-        if day > coverage_end(found):
-            return None
-    return found
+        k = min(e["weeks_at_number_one"] - 1, (day + dt.timedelta(days=6) - start).days // 7)
+        chart = start + k * week
+        if latest_chart is None or chart > latest_chart:
+            latest_chart = chart
+    if latest_chart is None or day > max(coverage_end(e) for e in entries):
+        return []
+    covering = [e for e in entries if _d(e["week_ending_date"]) <= latest_chart <= coverage_end(e)]
+    newest = max(e["week_ending_date"] for e in covering)
+    return [e for e in covering if e["week_ending_date"] == newest]
 
 
 def coverage_end(e):
@@ -358,25 +369,38 @@ def validate(chart, entries):
     if len(entries) < MIN_ROWS[chart]:
         errors.append(f"only {len(entries)} rows (expected at least {MIN_ROWS[chart]})")
 
-    for a, b in zip(entries, entries[1:]):
-        a_date = dt.date.fromisoformat(a["week_ending_date"])
-        b_date = dt.date.fromisoformat(b["week_ending_date"])
-        expected = a_date + dt.timedelta(days=7 * a["weeks_at_number_one"])
-        delta = (b_date - expected).days
-        where = f"{a['week_ending_date']} '{a['title']}' -> {b['week_ending_date']} '{b['title']}'"
-        if b_date <= a_date:
-            errors.append(f"out of order / duplicate: {where}")
-        elif delta >= 14:
-            errors.append(f"GAP of {delta} days (at least one chart week missing): {where}")
-        elif delta > 0:
-            warnings.append(f"{delta}-day shift (chart-day convention change?): {where}")
-        elif delta < 0:
-            warnings.append(f"overlap of {-delta} days (weeks count disagrees with next entry): {where}")
+    # Walk the runs in date order, tracking the furthest week covered so far.
+    # Several runs can overlap (two versions of one song swapping places in the
+    # 1950s), and two records can share a date (a joint number 1).
+    covered, prev = None, None
+    for e in entries:
+        start, end = _d(e["week_ending_date"]), coverage_end(e)
+        if prev is not None:
+            where = f"{prev['week_ending_date']} '{prev['title']}' -> {e['week_ending_date']} '{e['title']}'"
+            if start == _d(prev["week_ending_date"]):
+                if e["title"].lower() == prev["title"].lower():
+                    errors.append(f"duplicate row: {where}")
+                else:
+                    warnings.append(f"joint number 1: {where}")
+            else:
+                delta = (start - (covered + dt.timedelta(days=7))).days
+                if delta >= 14:
+                    errors.append(f"GAP of {delta} days (at least one chart week missing): {where}")
+                elif delta > 0:
+                    warnings.append(f"{delta}-day shift (chart-day convention change?): {where}")
+                elif start <= covered:
+                    warnings.append(f"overlap: {where} starts before the earlier run ends")
+                elif delta < 0:
+                    warnings.append(f"{-delta}-day shorter week (chart-day convention change?): {where}")
+        covered = end if covered is None else max(covered, end)
+        prev = e
 
     for kind, day, expected in SPOT_CHECKS[chart]:
-        entry = entries[0] if kind == "first" else lookup(entries, day)
-        got = entry["title"].lower() if entry else ""
-        ok = got == expected[1:] if expected.startswith("=") else expected in got
+        found = [entries[0]] if kind == "first" else lookup(entries, day)
+        titles = [e["title"].lower() for e in found]
+        ok = any((t == expected[1:]) if expected.startswith("=") else (expected in t) for t in titles)
+        got = " / ".join(titles)
+        entry = found[0] if found else None
         label = "first entry" if kind == "first" else day.isoformat()
         if not ok:
             errors.append(f"spot check failed for {label}: expected '{expected.lstrip('=')}', got '{got or 'nothing'}'")
@@ -446,7 +470,7 @@ def main():
         print(f"\n{chart}: {len(entries)} number ones", flush=True)
         print(f"  earliest week ending: {entries[0]['week_ending_date']}  ({entries[0]['title']})")
         print(f"  latest week ending:   {entries[-1]['week_ending_date']}  ({entries[-1]['title']})")
-        print(f"  covered up to:        {coverage_end(entries[-1]).isoformat()}")
+        print(f"  covered up to:        {max(coverage_end(e) for e in entries).isoformat()}")
         errors, warnings = validate(chart, entries)
         for w in warnings:
             print(f"  warning: {w}")
@@ -460,7 +484,7 @@ def main():
         meta[chart] = {
             "count": len(entries),
             "first_week_ending": entries[0]["week_ending_date"],
-            "covered_until": coverage_end(entries[-1]).isoformat(),
+            "covered_until": max(coverage_end(e) for e in entries).isoformat(),
         }
 
     if args.check:

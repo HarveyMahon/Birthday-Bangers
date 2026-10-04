@@ -17,6 +17,7 @@
  *   #single, #album     one block per chart, each containing:
  *     #<chart>-title, #<chart>-artist, #<chart>-week,
  *     #<chart>-spotify, #<chart>-youtube   (<a> elements)
+ *     #<chart>-joint     optional, shown only for a joint number 1
  *   #album-note         shown instead of #album when there was no albums chart yet
  *   #data-range         optional: filled with "Charts from ... to ..."
  *
@@ -42,14 +43,18 @@
    * became dated on Thursdays. We never hard-code those weekdays; the dates
    * in the data already carry them. Instead:
    *
-   *   1. A row's run starts six days before its first week-ending date.
-   *   2. It lasts until the next row's run starts. So when the convention
-   *      changed and two charts were 8-13 days apart instead of 7, the
-   *      in-between days belong to the earlier chart - it was still the
-   *      latest published number 1 on those days. Nothing falls in a hole.
-   *   3. The newest row is only trusted for the weeks Wikipedia says it has
-   *      been at number 1 so far. After that we say the data hasn't caught
-   *      up yet rather than guess.
+   *   1. A row's weeks at number 1 are its first week-ending date plus
+   *      7, 14, ... days, for as many weeks as Wikipedia lists.
+   *   2. For a date, the relevant chart is the latest chart week that had
+   *      started by then. When the convention changed and two charts were
+   *      8-13 days apart, the in-between days get the earlier chart - it was
+   *      still the latest number 1 on those days. Nothing falls in a hole.
+   *   3. If several rows cover that chart (in the 1950s two versions of a
+   *      song swapped places, so runs overlap), the row that reached number 1
+   *      most recently wins. Rows with the same date are a joint number 1,
+   *      and all of them are shown.
+   *   4. After the newest chart we have, we say the data hasn't caught up
+   *      yet rather than guess.
    *
    * scripts/build_data.py uses the same rules for its spot checks.
    * ------------------------------------------------------------------- */
@@ -69,31 +74,38 @@
     return rows
       .map((r) => ({ ...r, end: isoToDay(r.week_ending_date) }))
       .sort((a, b) => a.end - b.end)
-      .map((r) => ({ ...r, start: r.end - 6 }));
+      .map((r) => ({ ...r, start: r.end - 6, lastWeek: r.end + 7 * (r.weeks_at_number_one - 1) }));
   }
 
   /**
-   * Returns { status: "found", entry, weekEnding, inGap } | { status: "before" } | { status: "after" }
-   * inGap is true for the odd days between two charts at a convention change.
+   * Returns { status: "found", entries, weekEnding, inGap } | { status: "before" } | { status: "after" }
+   * entries has more than one item for a joint number 1. inGap is true for
+   * the odd days between two charts at a convention change.
    */
-  function lookup(entries, day) {
-    if (!entries.length || day < entries[0].start) return { status: "before" };
+  function lookup(rows, day) {
+    if (!rows.length || day < rows[0].start) return { status: "before" };
 
-    // binary search: last entry whose run starts on or before `day`
-    let lo = 0, hi = entries.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (entries[mid].start <= day) lo = mid; else hi = mid - 1;
+    // Latest chart week that had started by `day` (rule 2).
+    let chart = -Infinity;
+    for (const r of rows) {
+      if (r.start > day) break;                       // rows are sorted by date
+      const k = Math.min(r.weeks_at_number_one - 1, Math.floor((day + 6 - r.end) / 7));
+      chart = Math.max(chart, r.end + 7 * k);
     }
-    const entry = entries[lo];
-    const lastWeek = entry.end + 7 * (entry.weeks_at_number_one - 1);
-    if (lo === entries.length - 1 && day > lastWeek) return { status: "after" };
+    if (day > maxCovered(rows)) return { status: "after" };
 
-    // Which of the record's weeks at number 1 contains the day?
-    // (Days in a convention-change gap fall after the last week: use that week.)
-    const weekEnding = Math.min(entry.end + 7 * Math.floor((day - entry.start) / 7), lastWeek);
-    return { status: "found", entry, weekEnding, inGap: day > weekEnding };
+    // Rows covering that chart; the most recent arrival wins (rule 3).
+    const covering = rows.filter((r) => r.end <= chart && chart <= r.lastWeek);
+    const newest = Math.max(...covering.map((r) => r.end));
+    return {
+      status: "found",
+      entries: covering.filter((r) => r.end === newest),
+      weekEnding: chart,
+      inGap: day > chart,
+    };
   }
+
+  const maxCovered = (rows) => rows.reduce((m, r) => Math.max(m, r.lastWeek), -Infinity);
 
   /* ------------------------------ formatting ------------------------------ */
 
@@ -126,9 +138,8 @@
     const range = $("data-range");
     if (range && charts.singles.length) {
       const s = charts.singles;
-      const last = s[s.length - 1];
       range.textContent =
-        `Charts from the week ending ${fmt(s[0].end)} to the week ending ${fmt(lastCovered(s))}.`;
+        `Charts from the week ending ${fmt(s[0].end)} to the week ending ${fmt(maxCovered(s))}.`;
     }
   }).catch((err) => {
     root.dataset.data = "error";
@@ -145,7 +156,8 @@
   }
 
   function fillChart(prefix, found) {
-    const { entry, weekEnding, inGap } = found;
+    const { entries, weekEnding, inGap } = found;
+    const [entry, ...others] = entries;
     const title = $(prefix + "-title");
     title.textContent = entry.title;
     title.dataset.length = entry.title.length > 34 ? "long" : "short";   // themes may resize long titles
@@ -153,6 +165,13 @@
     $(prefix + "-week").textContent = inGap
       ? `Latest chart at the time: week ending ${fmt(weekEnding)}`
       : `Chart week ${fmt(weekEnding - 6)} to ${fmt(weekEnding)}`;
+    const joint = $(prefix + "-joint");
+    if (joint) {
+      joint.hidden = !others.length;
+      joint.textContent = others.length
+        ? "Joint number 1 with " + others.map((o) => `${o.title} by ${o.artist}`).join(" and ")
+        : "";
+    }
     const q = `${entry.artist} ${entry.title}`;
     const spotify = $(prefix + "-spotify");
     const youtube = $(prefix + "-youtube");
@@ -194,7 +213,7 @@
       return;
     }
     if (single.status === "after") {
-      showStatus(`The chart for ${fmt(day)} hasn't been added yet. Our data currently runs to ${fmt(lastCovered(charts.singles))} and updates every week.`);
+      showStatus(`The chart for ${fmt(day)} hasn't been added yet. Our data currently runs to ${fmt(maxCovered(charts.singles))} and updates every week.`);
       return;
     }
 
@@ -228,16 +247,12 @@
     });
   }
 
-  const lastCovered = (rows) => {
-    const last = rows[rows.length - 1];
-    return last.end + 7 * (last.weeks_at_number_one - 1);
-  };
 
   document.addEventListener("DOMContentLoaded", () => {
     $("lookup-form").addEventListener("submit", onSubmit);
     $("birthday").addEventListener("input", () => showStatus(""));
   });
 
-  // Exposed for tests only (tests/lookup.test.mjs); not used by the pages.
-  if (typeof window !== "undefined") window.__birthdayNumberOne = { lookup, prepare, isoToDay };
+  // Handy for checking lookups from the browser console; not used by the pages.
+  window.__birthdayNumberOne = { lookup, prepare, isoToDay };
 })();

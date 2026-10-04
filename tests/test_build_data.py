@@ -53,6 +53,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(rows[1]["weeks_at_number_one"], 2)            # footnote stripped
         self.assertEqual(rows[0]["week_ending_date"], "1989-12-23")    # sort key ignored
         self.assertEqual(rows[3]["artist"], "Sinéad O'Connor")
+        self.assertEqual(rows[3]["title"], "Nothing Compares 2 U")       # ‡ marker stripped
 
     def test_albums_rows(self):
         rows = bd.extract_entries(ALBUMS_HTML, "albums")
@@ -66,8 +67,8 @@ class LookupTests(unittest.TestCase):
         self.rows = bd.extract_entries(SINGLES_HTML, "singles")
 
     def find(self, y, m, d):
-        e = bd.lookup(self.rows, dt.date(y, m, d))
-        return e["title"] if e else None
+        found = bd.lookup(self.rows, dt.date(y, m, d))
+        return " + ".join(e["title"] for e in found) or None
 
     def test_week_boundaries(self):
         # Band Aid II: weeks ending 23 Dec, 30 Dec, 6 Jan -> covers 17 Dec .. 6 Jan
@@ -78,6 +79,23 @@ class LookupTests(unittest.TestCase):
         # last entry: 3 Feb + 3 more weeks -> covered until 24 Feb
         self.assertEqual(self.find(1990, 2, 24), "Nothing Compares 2 U")
         self.assertIsNone(self.find(1990, 2, 25))
+
+    def test_joint_and_overlapping_runs(self):
+        rows = [
+            {"artist": "A", "title": "Song A", "week_ending_date": "1957-01-05", "weeks_at_number_one": 4},
+            {"artist": "B", "title": "Song B", "week_ending_date": "1957-01-12", "weeks_at_number_one": 1},
+            {"artist": "C", "title": "Song C", "week_ending_date": "1957-02-02", "weeks_at_number_one": 2},
+            {"artist": "D", "title": "Song D", "week_ending_date": "1957-02-02", "weeks_at_number_one": 1},
+        ]
+        # B arrives inside A's run and wins that week; A covers again afterwards
+        self.assertEqual(" + ".join(e["title"] for e in bd.lookup(rows, dt.date(1957, 1, 10))), "Song B")
+        self.assertEqual(" + ".join(e["title"] for e in bd.lookup(rows, dt.date(1957, 1, 17))), "Song A")
+        # joint number 1, then C alone
+        self.assertEqual(" + ".join(e["title"] for e in bd.lookup(rows, dt.date(1957, 2, 1))), "Song C + Song D")
+        self.assertEqual(" + ".join(e["title"] for e in bd.lookup(rows, dt.date(1957, 2, 8))), "Song C")
+        errors, warnings = bd.validate("singles", rows)
+        self.assertFalse([e for e in errors if "GAP" in e or "duplicate" in e])
+        self.assertTrue(any("joint" in w for w in warnings))
 
     def test_validation_flags_gap(self):
         rows = [dict(r) for r in self.rows]

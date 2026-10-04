@@ -211,3 +211,5 @@ a { color: inherit; text-underline-offset: 0.18em; }
 /* -------------------------------------------------------------- small print */
 .small-print { margin-top: 64px; font-size: 0.875rem; color: var(--chalk-dim); }
 .small-print p { margin: 4px 0; }
+
+.joint { margin: 0 0 10px; font-weight: 700; color: var(--sleeve-7); }

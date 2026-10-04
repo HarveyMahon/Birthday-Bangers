@@ -59,7 +59,9 @@ The site will be at `https://<your-username>.github.io/<repo-name>/` (vinyl) and
 
 ## How a birthday is matched to a chart week
 
-Each chart covers the seven days up to and including its "week ending" date. A record's run starts six days before its first week-ending date and lasts until the next number 1's run begins. When the chart's dating convention changed and two charts were more than a week apart, the extra days count as the earlier chart, since it was still the latest number 1. The full rules are in the comment at the top of `js/app.js`.
+Each chart covers the seven days up to and including its "week ending" date. A record's run starts six days before its first week-ending date and lasts until the next number 1's run begins. When the chart's dating convention changed and two charts were more than a week apart, the extra days count as the earlier chart, since it was still the latest number 1. Joint number 1s (two records sharing a week) are shown together. The full rules are in the comment at the top of `js/app.js`.
+
+Since December 1999, Wikipedia's albums lists date each chart by the first day of its week, while the singles lists use the last day. The build script shifts those album dates forward six days so both files use week-ending dates, and checks that recent album and singles chart dates line up.
 
 ## Credits
 

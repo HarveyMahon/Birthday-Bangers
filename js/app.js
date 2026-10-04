@@ -41,7 +41,9 @@
    * The weekday a chart week ends on has changed over the decades - most
    * recently in July 2015, when new releases moved to Fridays and charts
    * became dated on Thursdays. We never hard-code those weekdays; the dates
-   * in the data already carry them. Instead:
+   * in the data already carry them. (Wikipedia's albums lists date charts by
+   * their first day since 1999; scripts/build_data.py shifts those to the
+   * week-ending convention, so both files mean the same thing.) Instead:
    *
    *   1. A row's weeks at number 1 are its first week-ending date plus
    *      7, 14, ... days, for as many weeks as Wikipedia lists.

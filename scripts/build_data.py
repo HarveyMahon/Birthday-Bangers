@@ -432,6 +432,8 @@ def build_chart(chart):
 
     # Decade pages repeat the single/album that carried over from the previous
     # decade, so de-duplicate on (date, title) and keep the first one seen.
+    if chart == "albums":
+        normalise_album_dates(all_entries)
     seen, unique = set(), []
     for e in sorted(all_entries, key=lambda e: e["week_ending_date"]):
         key = (e["week_ending_date"], e["title"].lower())
@@ -439,6 +441,43 @@ def build_chart(chart):
             seen.add(key)
             unique.append(e)
     return unique
+
+
+ALBUM_START_DATED_FROM = dt.date(1999, 12, 1)
+
+
+def normalise_album_dates(entries):
+    """Make album dates mean the same thing as singles dates.
+
+    The singles lists date each chart by the LAST day of its chart week
+    (a Saturday, then a Thursday since July 2015). Since December 1999 the
+    albums lists date each chart by its FIRST day (a Sunday, then a Friday):
+    e.g. "The Fate of Ophelia" and "The Life of a Showgirl" topped the same
+    chart, released Friday 10 October 2025, but are dated 16 and 10 October.
+    Shifting those album dates forward six days puts both charts on the
+    week-ending convention that js/app.js expects.
+    """
+    for e in entries:
+        d = dt.date.fromisoformat(e["week_ending_date"])
+        if d >= ALBUM_START_DATED_FROM and d.weekday() in (4, 6):   # Fri or Sun
+            e["week_ending_date"] = (d + dt.timedelta(days=6)).isoformat()
+    return entries
+
+
+def check_alignment(singles, albums):
+    """Since 2000 every album chart date should also be a singles chart date."""
+    chart_dates = set()
+    for e in singles:
+        start = dt.date.fromisoformat(e["week_ending_date"])
+        chart_dates.update(start + dt.timedelta(days=7 * k) for k in range(e["weeks_at_number_one"]))
+    recent = [e for e in albums if e["week_ending_date"] >= "2000-01-01"]
+    off = [e for e in recent if dt.date.fromisoformat(e["week_ending_date"]) not in chart_dates]
+    print(f"\nalignment: {len(recent) - len(off)}/{len(recent)} album dates since 2000 match a singles chart date", flush=True)
+    for e in off[:5]:
+        print(f"  not aligned: {e['week_ending_date']} '{e['title']}'")
+    if len(off) > max(5, len(recent) // 50):
+        return [f"{len(off)} album dates since 2000 don't line up with the singles chart - has the albums page date convention changed?"]
+    return []
 
 
 def write_if_changed(path: Path, obj) -> bool:
@@ -486,6 +525,11 @@ def main():
             "first_week_ending": entries[0]["week_ending_date"],
             "covered_until": max(coverage_end(e) for e in entries).isoformat(),
         }
+
+    for e in check_alignment(results["singles"], results["albums"]):
+        print(f"  ERROR:   {e}")
+        annotate("error", f"albums: {e}")
+        any_errors = True
 
     if args.check:
         print("\n--check given: nothing written.")

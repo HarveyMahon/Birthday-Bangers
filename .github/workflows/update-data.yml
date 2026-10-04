@@ -1,0 +1,43 @@
+name: Update chart data
+
+on:
+  schedule:
+    - cron: "17 9 * * 6"   # every Saturday 09:17 UTC (new chart is out by Friday evening)
+  workflow_dispatch:        # "Run workflow" button on the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run parser tests
+        run: python -m unittest discover tests -v
+
+      - name: Build and validate data
+        # Exits non-zero (and writes nothing) if a page fails or validation finds
+        # gaps / failed spot checks, so a bad Wikipedia edit can't break the site.
+        run: python scripts/build_data.py
+
+      - name: Commit if changed
+        run: |
+          if [ -z "$(git status --porcelain -- data/)" ]; then
+            echo "No data changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "Update chart data"
+          git push

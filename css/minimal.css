@@ -1,0 +1,132 @@
+/* Clean minimal theme for minimal.html. All behaviour lives in js/app.js. */
+
+:root {
+  --bg: #f6f7f9;
+  --ink: #15181d;
+  --muted: #5b6270;
+  --rule: #d9dde3;
+  --accent: #2346d4;
+  --field: #ffffff;
+  --font: "Schibsted Grotesk", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --ink: #eef0f3;
+    --muted: #a3aab6;
+    --rule: #2c323b;
+    --accent: #8ea4ff;
+    --field: #1c2027;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { background: var(--bg); color-scheme: light dark; }
+body {
+  margin: 0;
+  font: 400 1.0625rem/1.55 var(--font);
+  color: var(--ink);
+  background: var(--bg);
+}
+a { color: var(--accent); text-underline-offset: 0.2em; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.page {
+  width: min(100% - 32px, 46rem);
+  margin: 0 auto;
+  padding: clamp(40px, 9vw, 96px) 0 48px;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 4.6vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 32px;
+  max-width: 18ch;
+}
+
+/* --------------------------------------------------------------------- form */
+.lookup label { display: block; font-weight: 500; margin-bottom: 8px; }
+.lookup-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.lookup input {
+  flex: 1 1 220px;
+  min-height: 52px;
+  padding: 8px 14px;
+  font: 500 1.125rem var(--font);
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-bottom: 2px solid var(--ink);
+  border-radius: 6px 6px 0 0;
+}
+.lookup button {
+  min-height: 52px;
+  padding: 0 22px;
+  font: 700 1rem var(--font);
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { .lookup button { color: #0d1020; } }
+.lookup button:hover { filter: brightness(1.08); }
+.hint { margin: 10px 0 0; color: var(--muted); font-size: 0.9375rem; }
+
+.status {
+  margin: 24px 0 0;
+  padding: 12px 0 12px 16px;
+  border-left: 3px solid var(--accent);
+}
+
+/* ------------------------------------------------------------------- result */
+.result { margin-top: clamp(48px, 9vw, 80px); }
+.result h2 {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0;
+}
+.result h2:focus { outline: none; }
+
+.entry { margin: 0; }
+.entry + .entry, .album-note { margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--rule); }
+.kind { margin: 0 0 6px; color: var(--muted); }
+.entry-album .kind { margin-top: 0; }
+
+.title {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.entry-single .title { font-size: clamp(2.5rem, 9vw, 5.25rem); }
+.entry-single .title[data-length="long"] { font-size: clamp(2rem, 6.5vw, 3.75rem); }
+.entry-album .title { font-size: clamp(1.75rem, 5.5vw, 3rem); line-height: 1.04; }
+
+.artist { margin: 12px 0 0; font-size: clamp(1.125rem, 2.6vw, 1.375rem); font-weight: 500; }
+
+.meta {
+  margin: 16px 0 0;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 24px;
+  color: var(--muted); font-size: 0.9375rem;
+}
+.links { display: inline-flex; gap: 20px; }
+.links a { font-weight: 700; padding: 10px 0; }
+
+.album-note { color: var(--muted); }
+
+/* One quiet transition when a new result arrives. */
+.result[data-reveal="on"] .entry { animation: arrive 0.4s ease-out both; }
+.result[data-reveal="on"] .entry-album { animation-delay: 0.12s; }
+@keyframes arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .result[data-reveal="on"] .entry { animation: none; }
+}
+
+.foot { margin-top: 80px; color: var(--muted); font-size: 0.875rem; }
+.foot p { margin: 4px 0; }

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Find the UK number 1 single and album from the week you were born. Your birthday never leaves your browser.">
+  <title>Birthday Number One</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/minimal.css">
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <h1>The UK number 1 on your birthday</h1>
+
+    <form id="lookup-form" class="lookup" novalidate>
+      <label for="birthday">Date of birth</label>
+      <div class="lookup-row">
+        <input id="birthday" name="birthday" type="date" autocomplete="bday" required>
+        <button type="submit">Find my number 1</button>
+      </div>
+      <p class="hint">Works entirely in your browser. Your date is never sent or saved.</p>
+    </form>
+
+    <p id="status" class="status" role="status" hidden></p>
+
+    <section id="result" class="result" hidden aria-labelledby="result-heading">
+      <h2 id="result-heading" tabindex="-1"></h2>
+
+      <article id="single" class="entry entry-single">
+        <p class="kind">the number 1 single was</p>
+        <p id="single-title" class="title"></p>
+        <p id="single-artist" class="artist"></p>
+        <p class="meta">
+          <span id="single-week"></span>
+          <span class="links">
+            <a id="single-spotify" href="#" target="_blank" rel="noopener noreferrer">Spotify</a>
+            <a id="single-youtube" href="#" target="_blank" rel="noopener noreferrer">YouTube</a>
+          </span>
+        </p>
+      </article>
+
+      <article id="album" class="entry entry-album">
+        <p class="kind">and the number 1 album was</p>
+        <p id="album-title" class="title"></p>
+        <p id="album-artist" class="artist"></p>
+        <p class="meta">
+          <span id="album-week"></span>
+          <span class="links">
+            <a id="album-spotify" href="#" target="_blank" rel="noopener noreferrer">Spotify</a>
+            <a id="album-youtube" href="#" target="_blank" rel="noopener noreferrer">YouTube</a>
+          </span>
+        </p>
+      </article>
+      <p id="album-note" class="album-note" hidden></p>
+    </section>
+
+    <footer class="foot">
+      <p id="data-range"></p>
+      <p>Chart data from the <a href="https://www.officialcharts.com/">Official Charts Company</a>, via <a href="https://en.wikipedia.org/wiki/Lists_of_UK_singles_chart_number_ones">Wikipedia</a>. <a href="index.html">Vinyl version</a></p>
+    </footer>
+  </main>
+</body>
+</html>

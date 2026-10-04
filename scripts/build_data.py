@@ -33,7 +33,8 @@ DATA_DIR = ROOT / "data"
 
 API = "https://en.wikipedia.org/w/api.php"
 # Wikimedia asks every client to send a descriptive User-Agent.
-USER_AGENT = "uk-birthday-number-one/1.0 (static GitHub Pages hobby site; data build script)"
+USER_AGENT = ("BirthdayBangers/1.0 (https://github.com/HarveyMahon/birthday-bangers; "
+              "static hobby site, weekly data build) python-urllib")
 
 FIRST_DECADE = 1950
 CHARTS = {
@@ -50,6 +51,18 @@ MONTHS["sept"] = 9
 
 DATE_RE = re.compile(r"(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})")
 INT_RE = re.compile(r"\d+")
+
+
+import os
+
+IN_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
+
+
+def annotate(level: str, message: str):
+    """In GitHub Actions, also raise an annotation so the problem shows on the run page."""
+    if IN_ACTIONS:
+        message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::{level}::{message}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +89,8 @@ def fetch_page_html(title: str) -> str | None:
                 raise RuntimeError(payload["error"].get("info", "unknown API error"))
             return payload["parse"]["text"]
         except urllib.error.HTTPError as e:
-            last_err = e
+            body = e.read()[:300].decode("utf-8", "replace")
+            last_err = f"HTTP {e.code} {e.reason}: {body}"
             if e.code not in (429, 500, 502, 503, 504):
                 break
         except (urllib.error.URLError, TimeoutError) as e:
@@ -423,6 +437,7 @@ def main():
             results[chart] = build_chart(chart)
     except RuntimeError as e:
         print(f"\nERROR: {e}\nNothing was written.", flush=True)
+        annotate("error", f"build_data.py: {e}")
         return 2
 
     print("\n=== Summary ===", flush=True)
@@ -437,6 +452,9 @@ def main():
             print(f"  warning: {w}")
         for e in errors:
             print(f"  ERROR:   {e}")
+            annotate("error", f"{chart}: {e}")
+        if warnings:
+            annotate("notice", f"{chart}: {len(warnings)} warning(s), first: {warnings[0]}")
         print(f"  {len(errors)} error(s), {len(warnings)} warning(s)", flush=True)
         any_errors |= bool(errors)
         meta[chart] = {
